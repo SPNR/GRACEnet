@@ -1,30 +1,51 @@
-xlsFile <- 'C:/Users/Robert/Downloads/GRACEnet.xlsx'
+xlsPath <- 'W:/GRACEnet/data summary project files/'
+xlsInFile <- paste(xlsPath, 'GRACEnet_working_copy.xlsx', sep = '')
 
 # Package openxlsx provides read/write functions for Excel files
 # Use openxlsx for large xlsx files.
 library(openxlsx)
-summarySheet <- openxlsx::read.xlsx(xlsFile, sheet = 'DataCompilation-Soil',
-                                    colNames = FALSE)
+summary <- openxlsx::read.xlsx(xlsInFile, sheet = 'DataCompilation-Soil')
 
-for(i in ncol(summarySheet)) {
-  
-}
-# This list contains duplicates
-sheetNames <- summarySheet[2, ]
+expUnits <- openxlsx::read.xlsx(xlsInFile, sheet = 'ExperimentalUnits')
+expUnits <- expUnits[, names(expUnits) %in% names(summary)]
+expUnits <- unique(expUnits)
+
+mgtAmends <- openxlsx::read.xlsx(xlsInFile, sheet = 'MgtAmendments')
+mgtAmends <- mgtAmends[, names(mgtAmends) %in% names(summary)]
+mgtAmends <- unique(mgtAmends)
+
+measSoilChem <- openxlsx::read.xlsx(xlsInFile, sheet = 'MeasSoilChem')
+measSoilChem <- measSoilChem[, names(measSoilChem) %in% names(summary)]
+measSoilChem <- unique(measSoilChem)
+
+measSoilPhys <- openxlsx::read.xlsx(xlsInFile, sheet = 'MeasSoilPhys')
+measSoilPhys <- measSoilPhys[, names(measSoilPhys) %in% names(summary)]
+measSoilPhys <- unique(measSoilPhys)
 
 
-# strategy:
-#   1. Row 1 in the DataCompilation-Soil tab contains the sheet names for
-# quantities we need
-# 2. Row 2 contains the sheet name where each item in row 1 is located
+# Outer join
+mDF1 <- merge(x = expUnits, y = mgtAmends, by = 'Experimental.Unit.ID',
+              all = TRUE)
+rm(summary, expUnits, mgtAmends)
+
+
+mDF2 <- merge(x = mDF1, y = measSoilChem, by = 'Experimental.Unit.ID',
+             all = TRUE)
+rm(mDF1, measSoilChem)
+
+
+mDF3 <- merge(x = mDF2, y = measSoilPhys, by = 'Experimental.Unit.ID',
+              all = TRUE)
 
 
 
-#colClassVector <- templateSheet2[, 2]
+write.csv(mDF2, file = paste(xlsPath, 'mDF2a.csv', sep = ''))
 
-names(colClassVector) <- templateSheet2[, 1]
-# Now read worksheet 1, using colClassVector
-# templateSheet <- read.xlsx2(filename, sheetIndex = 1,
-#                             colClasses = colClassVector,
-#                             stringsAsFactors = FALSE)
+
+----------------------------------------------
+
+xlsOutFile <- paste(xlsPath, 'mDF2.xlsx', sep = '')
+openxlsx::write.xlsx(mDF2, xlsOutFile)
+
+
 
