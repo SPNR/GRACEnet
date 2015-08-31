@@ -7,7 +7,7 @@
 
 # Working copy of GRACEnet data file
 xlsPath <- 'W:/GRACEnet/data summary project files/'
-xlsInFile <- paste(xlsPath, 'GRACEnet_working_copy.xlsx', sep = '')
+xlsInFile <- paste(xlsPath, 'GRACEnet_working_copy.xlsx', sep = 1'')
 
 # Use openxlsx for reading and writing large xlsx files.
 library(openxlsx)
@@ -17,24 +17,42 @@ summary <- openxlsx::read.xlsx(xlsInFile, sheet = 'DataCompilation-Soil')
 #
 expUnits <- openxlsx::read.xlsx(xlsInFile, sheet = 'ExperimentalUnits')
 #expUnits <- expUnits[, names(expUnits) %in% names(summary)]
-expUnits <- unique(expUnits)
-#
 mgtAmends <- openxlsx::read.xlsx(xlsInFile, sheet = 'MgtAmendments')
 #mgtAmends <- mgtAmends[, names(mgtAmends) %in% names(summary)]
-mgtAmends <- unique(mgtAmends)
-#
 measSoilChem <- openxlsx::read.xlsx(xlsInFile, sheet = 'MeasSoilChem')
 #measSoilChem <- measSoilChem[, names(measSoilChem) %in% names(summary)]
-measSoilChem <- unique(measSoilChem)
-#
 measSoilPhys <- openxlsx::read.xlsx(xlsInFile, sheet = 'MeasSoilPhys')
 #measSoilPhys <- measSoilPhys[, names(measSoilPhys) %in% names(summary)]
-measSoilPhys <- unique(measSoilPhys)
-#
 treatments <- openxlsx::read.xlsx(xlsInFile, sheet = 'Treatments')
+
+# Find the indices of duplicate rows
+expUnitsDupInd <- which(duplicated(expUnits))
+mgtAmendsDupInd <- which(duplicated(mgtAmends))
+measSoilChemDupInd <- which(duplicated(measSoilChem))
+measSoilPhysDupInd <- which(duplicated(measSoilPhys))
+treatmentsDupInd <- which(duplicated(treatments))
+
+# Compile a DF of unique observations representing mgtAmends duplicate rows
+mgtAmendsDupDF <- unique(mgtAmends[mgtAmendsDupInd, ])
+# Write DF to an Excel file
+openxlsx::write.xlsx(mgtAmendsDupDF,
+                     file = paste(xlsPath, 'duplicates.xlsx', sep = ''),
+                     sheetName = 'MgtAmendsDups')
+# Compile a DF of unique observations representing mgtAmends duplicate rows
+measSoilPhysDupDF <- unique(measSoilPhys[measSoilPhysDupInd, ])
+# Write DF to an Excel file
+openxlsx::write.xlsx(measSoilPhysDupDF,
+                     file = paste(xlsPath, 'duplicates.xlsx', sep = ''),
+                     sheetName = 'SoilPhysDups')
+
+# Remove duplicate rows
+expUnits <- unique(expUnits)
+mgtAmends <- unique(mgtAmends)
+measSoilChem <- unique(measSoilChem)
+measSoilPhys <- unique(measSoilPhys)
 treatments <- unique(treatments)
 
-# Perform a series of outer joins
+# Perform a series of full outer joins on the five pertinent DFs
 mDF1 <- merge(x = expUnits, y = mgtAmends,
               by = c('Experimental.Unit.ID', 'Treatment.ID'), all = TRUE)
 
@@ -67,11 +85,32 @@ for(i in 1:nrow(mDF4)) {
     mDF4$State[i] <- substr(mDF4$Experimental.Unit.ID[i], 1, 2)
   }
   
+  # Check for valid state abbreviation
+  if(is.na(mDF4$State[i] %in% state.abb)) {
+    msg <- paste('Invalid state abbreviation in row', i)
+    stop(msg)
+  }
+  
 }
 
-
-# Write the final table to a csv file
+# Write the final merged DF to a csv file
 write.csv(mDF4, file = paste(xlsPath, 'mDF4.csv', sep = ''))
+
+# Subset only those rows in which total soil carbon, inorganic soil carbon and
+# bulk density all exist
+carbonDF <- mDF4[!is.na(mDF4[, 15]) & !is.na(mDF4[, 17]) & !is.na(mDF4[, 61]), ]
+# Write the final merged DF to a csv file
+write.csv(carbonDF, file = paste(xlsPath, 'mDF4_TSC_ISC_present.csv',
+                                  sep = ''))
+
+# Now subset those carbonDF rows in which mineral associated carbon exists
+soilPartCarbon <- carbonDF[!is.na(carbonDF[, 18]), ]
+# Write the final merged DF to a csv file
+write.csv(soilPartCarbon, file = paste(xlsPath, 'mDF4_TSC_ISC_SPC_present.csv',
+                                 sep = ''))
+
+
+
 
 #  ----------------------------------------------
 #
@@ -87,8 +126,6 @@ sort(table(mDF1$Experimental.Unit.ID),decreasing=TRUE)[1:3]
 
 # Subset rows containing the most frequent exp unit ID
 subDF <- mDF1[mDF1$Experimental.Unit.ID == 'COARDEC3_ST-N6', ]
-
-
 
 # Sort that subset by exp unit ID (not necessary: only one value)
 subDFsort <- mDF1[with(mDF1, order(Experimental.Unit.ID)), ]
