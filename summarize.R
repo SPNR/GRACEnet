@@ -7,7 +7,7 @@
 
 # Working copy of GRACEnet data file
 xlsPath <- 'W:/GRACEnet/data summary project files/'
-xlsInFile <- paste(xlsPath, 'GRACEnet_working_copy.xlsx', sep = 1'')
+xlsInFile <- paste(xlsPath, 'GRACEnet_working_copy.xlsx', sep = '')
 
 # Use openxlsx for reading and writing large xlsx files.
 library(openxlsx)
@@ -96,6 +96,9 @@ for(i in 1:nrow(mDF4)) {
 # Write the final merged DF to a csv file
 write.csv(mDF4, file = paste(xlsPath, 'mDF4.csv', sep = ''))
 
+
+#------- SUBSETTING ---------------------------------------------------
+
 # Subset only those rows in which total soil carbon, inorganic soil carbon and
 # bulk density all exist
 carbonDF <- mDF4[!is.na(mDF4[, 15]) & !is.na(mDF4[, 17]) & !is.na(mDF4[, 61]), ]
@@ -109,6 +112,22 @@ soilPartCarbon <- carbonDF[!is.na(carbonDF[, 18]), ]
 write.csv(soilPartCarbon, file = paste(xlsPath, 'mDF4_TSC_ISC_SPC_present.csv',
                                  sep = ''))
 
+#-------------------------------------------------------------------------
+
+
+xlsPath <- 'W:/GRACEnet/data summary project files/'
+xlsInFile <- paste(xlsPath, 'mDF4_TSC_ISC_present.csv', sep = '')
+
+# Use openxlsx for reading and writing large xlsx files.
+library(openxlsx)
+subset1 <- openxlsx::read.xlsx(xlsInFile)
+
+subset1 <- read.csv(xlsInFile)
+trtIdList <- unique(subset1$Treatment.ID)
+for(trt in trtIdList) {
+  trtSub <- subset1[subset1$Treatment.ID == trt, ]
+  dateCount <- length(unique(** extracted date (or year) from datetime **))
+}
 
 
 
