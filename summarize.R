@@ -6,8 +6,8 @@
 ################################################################################
 
 # Working copy of GRACEnet data file
-xlsPath <- 'W:/GRACEnet/data summary project files/'
-xlsInFile <- paste(xlsPath, 'GRACEnet_working_copy.xlsx', sep = '')
+xlsPath <- 'W:/GRACEnet/data summary project/'
+xlsInFile <- paste(xlsPath, 'GRACEnet.xlsx', sep = '')
 
 # Use openxlsx for reading and writing large xlsx files.
 library(openxlsx)
@@ -25,7 +25,7 @@ measSoilPhys <- openxlsx::read.xlsx(xlsInFile, sheet = 'MeasSoilPhys')
 #measSoilPhys <- measSoilPhys[, names(measSoilPhys) %in% names(summary)]
 treatments <- openxlsx::read.xlsx(xlsInFile, sheet = 'Treatments')
 
-# Find the indices of duplicate rows
+# Find the indices of duplicate rows within each worksheet
 expUnitsDupInd <- which(duplicated(expUnits))
 mgtAmendsDupInd <- which(duplicated(mgtAmends))
 measSoilChemDupInd <- which(duplicated(measSoilChem))
@@ -36,13 +36,14 @@ treatmentsDupInd <- which(duplicated(treatments))
 mgtAmendsDupDF <- unique(mgtAmends[mgtAmendsDupInd, ])
 # Write DF to an Excel file
 openxlsx::write.xlsx(mgtAmendsDupDF,
-                     file = paste(xlsPath, 'duplicates.xlsx', sep = ''),
+                     file = paste(xlsPath, 'duplicates_original_mgmt.xlsx', sep = ''),
                      sheetName = 'MgtAmendsDups')
+
 # Compile a DF of unique observations representing mgtAmends duplicate rows
 measSoilPhysDupDF <- unique(measSoilPhys[measSoilPhysDupInd, ])
 # Write DF to an Excel file
 openxlsx::write.xlsx(measSoilPhysDupDF,
-                     file = paste(xlsPath, 'duplicates.xlsx', sep = ''),
+                     file = paste(xlsPath, 'duplicates_original_phys.xlsx', sep = ''),
                      sheetName = 'SoilPhysDups')
 
 # Remove duplicate rows
@@ -51,6 +52,8 @@ mgtAmends <- unique(mgtAmends)
 measSoilChem <- unique(measSoilChem)
 measSoilPhys <- unique(measSoilPhys)
 treatments <- unique(treatments)
+
+#------- Join on date when possible !!!!!!!!
 
 # Perform a series of full outer joins on the five pertinent DFs
 mDF1 <- merge(x = expUnits, y = mgtAmends,
@@ -97,38 +100,87 @@ for(i in 1:nrow(mDF4)) {
 write.csv(mDF4, file = paste(xlsPath, 'mDF4.csv', sep = ''))
 
 
-#------- SUBSETTING ---------------------------------------------------
+#------- SUBSETTING FOR CARBON DATA --------------------------------------------
 
-# Subset only those rows in which total soil carbon, inorganic soil carbon and
-# bulk density all exist
+# Subset only those rows in which total total soil carbon, inorganic soil carbon
+# and bulk density all exist
 carbonDF <- mDF4[!is.na(mDF4[, 15]) & !is.na(mDF4[, 17]) & !is.na(mDF4[, 61]), ]
 # Write the final merged DF to a csv file
 write.csv(carbonDF, file = paste(xlsPath, 'mDF4_TSC_ISC_present.csv',
                                   sep = ''))
 
-# Now subset those carbonDF rows in which mineral associated carbon exists
+# Now subset those carbonDF rows in which soil particulate carbon exists
 soilPartCarbon <- carbonDF[!is.na(carbonDF[, 18]), ]
 # Write the final merged DF to a csv file
 write.csv(soilPartCarbon, file = paste(xlsPath, 'mDF4_TSC_ISC_SPC_present.csv',
                                  sep = ''))
 
-#-------------------------------------------------------------------------
 
+#------ SEARCH FOR MULTIPLE DATES -----------------------------------------
+#
+# This section of code looks for multiple dates within each Treatment ID because
+# the earliest date will be considered as a baseline for carbon content.
 
-xlsPath <- 'W:/GRACEnet/data summary project files/'
-xlsInFile <- paste(xlsPath, 'mDF4_TSC_ISC_present.csv', sep = '')
+# Define default path and input filename
+xlsPath <- 'W:/GRACEnet/data summary project/'
+xlsInFile <- paste(xlsPath, 'mDF4_TSC_ISC_SPC_present.csv', sep = '')
 
-# Use openxlsx for reading and writing large xlsx files.
-library(openxlsx)
-subset1 <- openxlsx::read.xlsx(xlsInFile)
+# Read in csv format to avoid memory errors on a 4GB system
+mdf4Subset <- read.csv(xlsInFile)
 
-subset1 <- read.csv(xlsInFile)
-trtIdList <- unique(subset1$Treatment.ID)
+# Rename mdf4Subset depth columns for easier coding
+names(mdf4Subset)[names(mdf4Subset) ==
+                    'Upper.soil.layer..soil..centimeters'] <- 'depth.upper'
+names(mdf4Subset)[names(mdf4Subset) ==
+                    'Lower.soil.layer..soil..centimeters'] <- 'depth.lower'
+
+# Define a DF 'baselineSub' whose rows will consist of Treatment ID + soil depth
+# combos from mdf4Subset that have at least two sampling dates (so that delta C
+# can be calculated)
+#
+baselineSub <- mdf4Subset[1, ]  # This replicates column names from mdf4Subset
+baselineSub <- baselineSub[-c(1), ]  # Now delete the first (and only) row
+
+# Remove rows where date = NA
+mdf4Subset <- mdf4Subset[!is.na(mdf4Subset$Date), ]
+# Form a list of unique Treatment IDs in mdf4Subset
+trtIdList <- unique(mdf4Subset$Treatment.ID)
+# Remove NA values from trtIdList
+trtIdList <- trtIdList[!is.na(trtIdList)]
+
+# For each Treatment ID...
 for(trt in trtIdList) {
-  trtSub <- subset1[subset1$Treatment.ID == trt, ]
-  dateCount <- length(unique(** extracted date (or year) from datetime **))
-}
+  
+  # Subset rows by current trt
+  trtSub <- mdf4Subset[mdf4Subset$Treatment.ID == trt, ]
+  # Create a list of unique upper depths for current trt
+  depthList <- unique(trtSub$depth.upper)
+  # For each depth.upper value
+  for(du in depthList) {
+    
+    # Form a list of unique text dates
+    textDateList <- unique(trtSub$Date)
+    # Identify earliest and latest dates
+    firstDate <- min(as.Date(textDateList, format = '%m/%d/%Y'))
+    lastDate <- max(as.Date(textDateList, format = '%m/%d/%Y'))
+    # If first and last dates are the same...
+    if(firstDate == lastDate) {
+      # Find the row number for this combo of trt and du in mdf4Subset
+      mdf4CurrentRow <- which(mdf4Subset$Treatment.ID == trt &
+                                mdf4Subset$depth.upper == du)
+      # Delete this row from mdf4Subset
+      mdf4Subset <- mdf4Subset[-c(mdf4CurrentRow), ]
+    # Else rbind to DF baselineSub
+    }else {
+      baselineSub <- rbind(baselineSub, trtSub[trtSub$depth.upper == du, ])
+    }
+    
+  }  # End du for-loop
+  
+}  # End trt for-loop
 
+write.csv(baselineSub, file =
+            paste(xlsPath, 'multiple_date_trts.csv', sep = ''))
 
 
 #  ----------------------------------------------
