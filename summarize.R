@@ -6,12 +6,13 @@
 ################################################################################
 
 # Working copy of GRACEnet data file
-xlsPath <- 'W:/GRACEnet/data summary project/'
-xlsInFile <- paste(xlsPath, 'GRACEnet.xlsx', sep = '')
+#xlsPath <- 'W:/GRACEnet/data summary project/'
+xlsPath <- 'C:/Users/Robert/Documents/R/GRACEnet/'
+xlsInFile <- paste(xlsPath, 'GRACEnet_working_copy.xlsx', sep = '')
 
 # Use openxlsx for reading and writing large xlsx files.
 library(openxlsx)
-summary <- openxlsx::read.xlsx(xlsInFile, sheet = 'DataCompilation-Soil')
+# summary <- openxlsx::read.xlsx(xlsInFile, sheet = 'DataCompilation-Soil')
 
 # Read five different worksheets
 #
@@ -32,28 +33,37 @@ measSoilChemDupInd <- which(duplicated(measSoilChem))
 measSoilPhysDupInd <- which(duplicated(measSoilPhys))
 treatmentsDupInd <- which(duplicated(treatments))
 
+# For the current project, only mgtAmends and measSoilPhys have duplicate rows
+#
+# Sys.setenv(R_ZIPCMD = "C:/Rtools/bin/zip.exe") - run this if zip error occurs
+#
 # Compile a DF of unique observations representing mgtAmends duplicate rows
 mgtAmendsDupDF <- unique(mgtAmends[mgtAmendsDupInd, ])
 # Write DF to an Excel file
 openxlsx::write.xlsx(mgtAmendsDupDF,
-                     file = paste(xlsPath, 'duplicates_original_mgmt.xlsx', sep = ''),
-                     sheetName = 'MgtAmendsDups')
-
+                     file = paste(xlsPath, 'duplicates_original_mgmt.xlsx',
+                                  sep = ''), sheetName = 'MgtAmendsDups')
 # Compile a DF of unique observations representing mgtAmends duplicate rows
 measSoilPhysDupDF <- unique(measSoilPhys[measSoilPhysDupInd, ])
 # Write DF to an Excel file
 openxlsx::write.xlsx(measSoilPhysDupDF,
-                     file = paste(xlsPath, 'duplicates_original_phys.xlsx', sep = ''),
-                     sheetName = 'SoilPhysDups')
+                     file = paste(xlsPath, 'duplicates_original_phys.xlsx',
+                                  sep = ''), sheetName = 'SoilPhysDups')
+
+# Create a list of the five component data frames
+# dfList <- c(expUnits, mgtAmends, measSoilChem, measSoilPhys, treatments)
 
 # Remove duplicate rows
+# lapply(dfList, function(x) x <- unique(x)) doesn't work without assignment
+
 expUnits <- unique(expUnits)
 mgtAmends <- unique(mgtAmends)
 measSoilChem <- unique(measSoilChem)
 measSoilPhys <- unique(measSoilPhys)
 treatments <- unique(treatments)
 
-#------- Join on date when possible !!!!!!!!
+# Identify rows in which Treatment.ID = 0 (TROUBLESHOOTING)
+which(is.na(treatments$Treatment.ID))
 
 # Perform a series of full outer joins on the five pertinent DFs
 mDF1 <- merge(x = expUnits, y = mgtAmends,
@@ -94,15 +104,17 @@ for(i in 1:nrow(mDF4)) {
     stop(msg)
   }
   
-}
+}  # End for-loop
 
 # Write the final merged DF to a csv file
 write.csv(mDF4, file = paste(xlsPath, 'mDF4.csv', sep = ''))
 
+# openxlsx::write.xlsx(mDF4, file = paste(xlsPath, 'mDF4.xlsx', sep = ''))
+
 
 #------- SUBSETTING FOR CARBON DATA --------------------------------------------
 
-# Subset only those rows in which total total soil carbon, inorganic soil carbon
+# Subset only those rows in which total soil carbon, inorganic soil carbon
 # and bulk density all exist
 carbonDF <- mDF4[!is.na(mDF4[, 15]) & !is.na(mDF4[, 17]) & !is.na(mDF4[, 61]), ]
 # Write the final merged DF to a csv file
@@ -115,61 +127,122 @@ soilPartCarbon <- carbonDF[!is.na(carbonDF[, 18]), ]
 write.csv(soilPartCarbon, file = paste(xlsPath, 'mDF4_TSC_ISC_SPC_present.csv',
                                  sep = ''))
 
-
 #------ SEARCH FOR MULTIPLE DATES -----------------------------------------
 #
 # This section of code looks for multiple dates within each Treatment ID because
 # the earliest date will be considered as a baseline for carbon content.
 
 # Define default path and input filename
-xlsPath <- 'W:/GRACEnet/data summary project/'
-xlsInFile <- paste(xlsPath, 'mDF4_TSC_ISC_SPC_present.csv', sep = '')
+# xlsPath <- 'W:/GRACEnet/data summary project/'
+# xlsInFile <- paste(xlsPath, 'mDF4_TSC_ISC_SPC_present.csv', sep = '')
 
 # Read in csv format to avoid memory errors on a 4GB system
-mdf4Subset <- read.csv(xlsInFile)
+# carbonSubset <- read.csv(xlsInFile)
 
-# Rename mdf4Subset depth columns for easier coding
-names(mdf4Subset)[names(mdf4Subset) ==
-                    'Upper.soil.layer..soil..centimeters'] <- 'depth.upper'
-names(mdf4Subset)[names(mdf4Subset) ==
-                    'Lower.soil.layer..soil..centimeters'] <- 'depth.lower'
+carbonSubset <- carbonDF  # Subset of mDF4 with values to calculate soil C
 
-# Define a DF 'baselineSub' whose rows will consist of Treatment ID + soil depth
-# combos from mdf4Subset that have at least two sampling dates (so that delta C
-# can be calculated)
+# Rename carbonSubset depth columns for easier coding
+names(carbonSubset)[names(carbonSubset) ==
+                    'Upper.soil.layer,.soil,.centimeters'] <- 'depth.upper'
+names(carbonSubset)[names(carbonSubset) ==
+                    'Lower.soil.layer,.soil,.centimeters'] <- 'depth.lower'
+
+# Define a DF 'baselineSub' whose rows will consist of Exp Unit ID +
+# Treatment ID + upper soil depth + lower soil depth combos from carbonSubset
+# that have at least two sampling dates (so that delta C can be calculated)
 #
-baselineSub <- mdf4Subset[1, ]  # This replicates column names from mdf4Subset
-baselineSub <- baselineSub[-c(1), ]  # Now delete the first (and only) row
+# This replicates column names from carbonSubset
+baselineSub <- carbonSubset[FALSE, ]
+# Remove the Date column
+baselineSub[, !(names(baselineSub) %in% 'Date')]
+# Add First.Date and Last.Date columns
+newCols <- c('First.Date', 'Last.Date')
+baselineSub[c(names(carbonSubset), -c('Date'), c('First.Date', 'Last.Date'))]
+
+# The dplyr package provides filter()
+library(dplyr)
 
 # Remove rows where date = NA
-mdf4Subset <- mdf4Subset[!is.na(mdf4Subset$Date), ]
-# Form a list of unique Treatment IDs in mdf4Subset
-trtIdList <- unique(mdf4Subset$Treatment.ID)
+carbonSubset <- filter(carbonSubset, !is.na(Date))
+
+#------------  Start troubleshooting block 1  --------------------------
+#
+# Create a list that will contain Treatment IDs that associate with more than
+# one Experimental Unit ID
+probTrtList <- NULL  # There are 90 such trt ids, so we'll have to check
+# trtID/expID combos for multiple dates
+
+# Check if more than one Experiemental Unit ID is associated with each
+# Treatment ID
+for(trt in trtIdList) {
+  trtSub <- filter(carbonSubset, Treatment.ID == trt)
+  if(length(unique(trtSub$Experimental.Unit.ID)) > 1) probTrtList <- 
+      c(probTrtList, trt)
+}
+
+# Now create a list that will contain Exp Unit IDs that associate with more
+# than one Trt ID
+probExpList <- NULL  # There are 5 such exp unit ids, all at ARDEC
+
+# Check if more than one Trt ID is associated with each
+# Exp Unit ID
+for(exp in expIdList) {
+  expSub <- filter(carbonSubset, Experimental.Unit.ID == exp)
+  if(length(unique(expSub$Treatment.ID)) > 1) probExpList <- 
+      c(probExpList, exp)
+}
+#
+#------------  End troubleshooting block 1  --------------------------
+
+
+# Form a list of unique Treatment IDs in carbonSubset
+trtIdList <- unique(carbonSubset$Treatment.ID)
 # Remove NA values from trtIdList
 trtIdList <- trtIdList[!is.na(trtIdList)]
 
 # For each Treatment ID...
 for(trt in trtIdList) {
-  
   # Subset rows by current trt
-  trtSub <- mdf4Subset[mdf4Subset$Treatment.ID == trt, ]
-  # Create a list of unique upper depths for current trt
-  depthList <- unique(trtSub$depth.upper)
-  # For each depth.upper value
-  for(du in depthList) {
+  trtSub <- filter(carbonSubset, Treatment.ID == trt)
+  # Create a list of unique exp unit ids for current trt
+  expTrtList <- unique(trtSub$Experimental.Unit.ID)
+  
+  # For each exp value within current trt
+  for(exp in expTrtList) {
+    # Subset rows by current exp
+    expTrtSub <- filter(trtSub, Experimental.Unit.ID == exp)
+    # Form a list of unique depth.upper values
+    depthUpExpTrtList <- unique(expTrtSub$depth.upper)
     
-    # Form a list of unique text dates
-    textDateList <- unique(trtSub$Date)
+    # For each depth.upper in current trt + exp combo
+    for(du in depthUpExpTrtList) {
+      # Subset rows by current du
+      duExpTrtSub <- filter(expTrtSub, depth.upper == du)
+      # Form a list of unique depth.lower values
+      depthLoDepthUpExpTrtList <- unique(duExpTrtSub$depth.lower)
+      
+      # For each depth.lower in current trt + exp + du combo
+      for(dl in depthLoDepthUpExpTrtList) {
+        dlDuExpTrtSub <- filter(duExpTrtSub, depth.lower == dl)
+        dateList <- unique(dlDuExpTrtSub$Date)
+        if(length(dateList > 1)) {
+          baselineSub <- rbind(baselineSub, dlDuExpTrtSub)
+        }  # End if
+      }  # End dl for-loop
+    }  # End du for-loop
+  }  # End exp for-loop
+}  # End trt for-loop
+
     # Identify earliest and latest dates
     firstDate <- min(as.Date(textDateList, format = '%m/%d/%Y'))
     lastDate <- max(as.Date(textDateList, format = '%m/%d/%Y'))
     # If first and last dates are the same...
     if(firstDate == lastDate) {
-      # Find the row number for this combo of trt and du in mdf4Subset
-      mdf4CurrentRow <- which(mdf4Subset$Treatment.ID == trt &
-                                mdf4Subset$depth.upper == du)
-      # Delete this row from mdf4Subset
-      mdf4Subset <- mdf4Subset[-c(mdf4CurrentRow), ]
+      # Find the row number for this combo of trt and du in carbonSubset
+      mdf4CurrentRow <- which(carbonSubset$Treatment.ID == trt &
+                                carbonSubset$depth.upper == du)
+      # Delete this row from carbonSubset
+      carbonSubset <- carbonSubset[-c(mdf4CurrentRow), ]
     # Else rbind to DF baselineSub
     }else {
       baselineSub <- rbind(baselineSub, trtSub[trtSub$depth.upper == du, ])
