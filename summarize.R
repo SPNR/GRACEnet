@@ -6,8 +6,8 @@
 ################################################################################
 
 # Working copy of GRACEnet data file
-xlsPath <- 'W:/GRACEnet/data summary project/'
-#xlsPath <- 'C:/Users/Robert/Documents/R/GRACEnet/'
+#xlsPath <- 'W:/GRACEnet/data summary project/'
+xlsPath <- 'C:/Users/Robert/Documents/R/GRACEnet/'
 xlsInFile <- paste(xlsPath, 'GRACEnet_working_copy.xlsx', sep = '')
 
 # Use openxlsx for reading and writing large xlsx files.
@@ -60,9 +60,6 @@ measSoilChem <- unique(measSoilChem)
 measSoilPhys <- unique(measSoilPhys)
 treatments <- unique(treatments)
 
-# Identify rows in which Treatment.ID = 0 (TROUBLESHOOTING)
-which(is.na(treatments$Treatment.ID))
-
 # Perform a series of full outer joins on the five pertinent DFs
 mDF1 <- merge(x = expUnits, y = mgtAmends,
               by = c('Experimental.Unit.ID', 'Treatment.ID'), all = TRUE)
@@ -114,9 +111,7 @@ write.csv(mDF4, file = paste(xlsPath, 'mDF4.csv', sep = ''))
 
 # Subset only those rows in which total soil carbon, inorganic soil carbon
 # and bulk density all exist
-carbonDF <- mDF4[!is.na(mDF4[, 15]) &
-                   !is.na(mDF4[, 17]) &
-                   !is.na(mDF4[, 61]), ]
+carbonDF <- mDF4[!is.na(mDF4[, 15]) & !is.na(mDF4[, 17]) & !is.na(mDF4[, 61]), ]
 # Write the final merged DF to a csv file
 write.csv(carbonDF, file = paste(xlsPath, 'mDF4_TSC_ISC_present.csv',
                                   sep = ''))
@@ -201,6 +196,7 @@ trtIdList <- unique(carbonSubset$Treatment.ID)
 # Remove NA values from trtIdList
 trtIdList <- trtIdList[!is.na(trtIdList)]
 
+
 # For each Treatment ID...
 for(trt in trtIdList) {
   # Subset rows by current trt
@@ -213,18 +209,18 @@ for(trt in trtIdList) {
     # Subset rows by current exp
     expTrtSub <- filter(trtSub, Experimental.Unit.ID == exp)
     # Form a list of unique depth.upper values
-    depthUpExpTrtList <- unique(expTrtSub$depth.upper)
-    
+    depthUpExpTrtList <- unique(expTrtSub$Depth.upper)
+
     # For each depth.upper in current trt + exp combo
     for(du in depthUpExpTrtList) {
       # Subset rows by current du
-      duExpTrtSub <- filter(expTrtSub, depth.upper == du)
+      duExpTrtSub <- filter(expTrtSub, Depth.upper == du)
       # Form a list of unique depth.lower values
-      depthLoDepthUpExpTrtList <- unique(duExpTrtSub$depth.lower)
+      depthLoDepthUpExpTrtList <- unique(duExpTrtSub$Depth.lower)
       
       # For each depth.lower in current trt + exp + du combo
       for(dl in depthLoDepthUpExpTrtList) {
-        dlDuExpTrtSub <- filter(duExpTrtSub, depth.lower == dl)
+        dlDuExpTrtSub <- filter(duExpTrtSub, Depth.lower == dl)
 #        dateList <- unique(dlDuExpTrtSub$Date)
 #        if(length(dateList > 1)) {
         # If earliest and latest dates are not equal
@@ -240,7 +236,6 @@ for(trt in trtIdList) {
   }  # End exp for-loop
 }  # End trt for-loop
 
-write.csv(baselineSub, file = paste(xlsPath, 'baselineSub.csv'))
 
 # Calculate SOC stocks
 #
@@ -280,14 +275,19 @@ baselineSub$Yearly.delta.soil.organic.carbon.stocks <- NA_real_
 
 # Calculate change in soil organic carbon stocks
 for(i in seq(2, nrow(baselineSub), by =2)) {
-  baselineSub$Delta.soil.organic.carbon.stocks <-
+  # Absolute change
+  baselineSub$Delta.soil.organic.carbon.stocks[i] <-
     baselineSub$Soil.organic.carbon.stocks[i] -
     baselineSub$Soil.organic.carbon.stocks[i - 1]
-  
+  # Number of years in study (fractional)
+  numberOfYears <- (baselineSub$Date[i] - baselineSub$Date[i - 1]) / eyears(1)
+  # Yearly change
+  baselineSub$Yearly.delta.soil.organic.carbon.stocks[i] <-
+    baselineSub$Delta.soil.organic.carbon.stocks[i] / numberOfYears
 }
 
-(baselineSub$Date[2] - baselineSub$Date[1]) / eyears(1)
 
+write.csv(baselineSub, file = paste(xlsPath, 'baselineSub.csv'))
 
 #  ----------------------------------------------
 #
