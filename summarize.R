@@ -6,8 +6,8 @@
 ################################################################################
 
 # Working copy of GRACEnet data file
-#xlsPath <- 'W:/GRACEnet/data summary project/'
-xlsPath <- 'C:/Users/Robert/Documents/R/GRACEnet/'
+xlsPath <- 'W:/GRACEnet/data summary project/'
+#xlsPath <- 'C:/Users/Robert/Documents/R/GRACEnet/'
 xlsInFile <- paste(xlsPath, 'GRACEnet_working_copy.xlsx', sep = '')
 
 # Use openxlsx for reading and writing large xlsx files.
@@ -26,14 +26,16 @@ measSoilPhys <- openxlsx::read.xlsx(xlsInFile, sheet = 'MeasSoilPhys')
 #measSoilPhys <- measSoilPhys[, names(measSoilPhys) %in% names(summary)]
 treatments <- openxlsx::read.xlsx(xlsInFile, sheet = 'Treatments')
 
-# Find the indices of duplicate rows within each worksheet
-expUnitsDupInd <- which(duplicated(expUnits))
-mgtAmendsDupInd <- which(duplicated(mgtAmends))
-measSoilChemDupInd <- which(duplicated(measSoilChem))
-measSoilPhysDupInd <- which(duplicated(measSoilPhys))
-treatmentsDupInd <- which(duplicated(treatments))
 
 #-------------- Debugging block 1 start -----------------------------------
+#
+# Find the indices of duplicate rows within each worksheet
+# expUnitsDupInd <- which(duplicated(expUnits))
+# mgtAmendsDupInd <- which(duplicated(mgtAmends))
+# measSoilChemDupInd <- which(duplicated(measSoilChem))
+# measSoilPhysDupInd <- which(duplicated(measSoilPhys))
+# treatmentsDupInd <- which(duplicated(treatments))
+
 # For the current project, only mgtAmends and measSoilPhys have duplicate rows
 #
 # Sys.setenv(R_ZIPCMD = "C:/Rtools/bin/zip.exe") - run this if zip error occurs
@@ -52,7 +54,6 @@ treatmentsDupInd <- which(duplicated(treatments))
 #                                   sep = ''), sheetName = 'SoilPhysDups')
 #
 #-------------- Debugging block 1 end -----------------------------------
-
 
 expUnits <- unique(expUnits)
 mgtAmends <- unique(mgtAmends)
@@ -109,6 +110,13 @@ write.csv(mDF4, file = paste(xlsPath, 'mDF4.csv', sep = ''))
 
 #------- SUBSETTING FOR CARBON DATA --------------------------------------------
 
+# Create a subset for TSC and BD only.  If SIC value is missing, we will assume
+# that SIC was negligibly small, implying that SOC ~ TSC.
+
+# ++++++  code will go here
+
+
+
 # Subset only those rows in which total soil carbon, inorganic soil carbon
 # and bulk density all exist
 carbonDF <- mDF4[!is.na(mDF4[, 15]) & !is.na(mDF4[, 17]) & !is.na(mDF4[, 61]), ]
@@ -137,13 +145,12 @@ write.csv(soilPartCarbon, file = paste(xlsPath, 'mDF4_TSC_ISC_SPC_present.csv',
 carbonSubset <- carbonDF  # Subset of mDF4 with values to calculate soil C
 
 # Rename carbonSubset depth columns for easier coding
-names(carbonSubset)[names(carbonSubset) ==
-                    'Upper.soil.layer,.soil,.centimeters'] <- 'Depth.upper'
-names(carbonSubset)[names(carbonSubset) ==
-                    'Lower.soil.layer,.soil,.centimeters'] <- 'Depth.lower'
+#
+upperLayerOriginal <- 'Upper.soil.layer,.soil,.centimeters'
+lowerLayerOriginal <- 'Lower.soil.layer,.soil,.centimeters'
+names(carbonSubset)[names(carbonSubset) == upperLayerOriginal] <- 'Depth.upper'
+names(carbonSubset)[names(carbonSubset) == lowerLayerOriginal] <- 'Depth.lower'
 
-# Coerce text dates to 'Date' class
-carbonSubset$Date <- as.Date(carbonSubset$Date, format = '%m/%d/%Y')
 
 # Define a DF 'baselineSub' whose rows will consist of Exp Unit ID +
 # Treatment ID + upper soil depth + lower soil depth combos from carbonSubset
@@ -151,8 +158,6 @@ carbonSubset$Date <- as.Date(carbonSubset$Date, format = '%m/%d/%Y')
 #
 # Replicate column names from carbonSubset
 baselineSub <- carbonSubset[FALSE, ]
-# Remove the Date column
-# baselineSub <- baselineSub[, !(names(baselineSub) %in% 'Date')]
 
 # The dplyr package provides filter()
 library(dplyr)
@@ -160,42 +165,10 @@ library(dplyr)
 # Remove rows where date = NA
 carbonSubset <- filter(carbonSubset, !is.na(Date))
 
-
-#------------  Debugging block 2 start  --------------------------
-#
-# Create a list that will contain Treatment IDs that associate with more than
-# one Experimental Unit ID
-probTrtList <- NULL  # There are 90 such trt ids, so we'll have to check
-# trtID/expID combos for multiple dates
-
-# Check if more than one Experiemental Unit ID is associated with each
-# Treatment ID
-for(trt in trtIdList) {
-  trtSub <- filter(carbonSubset, Treatment.ID == trt)
-  if(length(unique(trtSub$Experimental.Unit.ID)) > 1) probTrtList <- 
-      c(probTrtList, trt)
-}
-
-# Now create a list that will contain Exp Unit IDs that associate with more
-# than one Trt ID
-probExpList <- NULL  # There are 5 such exp unit ids, all at ARDEC
-
-# Check if more than one Trt ID is associated with each
-# Exp Unit ID
-for(exp in expIdList) {
-  expSub <- filter(carbonSubset, Experimental.Unit.ID == exp)
-  if(length(unique(expSub$Treatment.ID)) > 1) probExpList <- 
-      c(probExpList, exp)
-}
-#
-#------------  Debugging block 2 end  --------------------------
-
-
 # Form a list of unique Treatment IDs in carbonSubset
 trtIdList <- unique(carbonSubset$Treatment.ID)
 # Remove NA values from trtIdList
 trtIdList <- trtIdList[!is.na(trtIdList)]
-
 
 # For each Treatment ID...
 for(trt in trtIdList) {
@@ -221,8 +194,6 @@ for(trt in trtIdList) {
       # For each depth.lower in current trt + exp + du combo
       for(dl in depthLoDepthUpExpTrtList) {
         dlDuExpTrtSub <- filter(duExpTrtSub, Depth.lower == dl)
-#        dateList <- unique(dlDuExpTrtSub$Date)
-#        if(length(dateList > 1)) {
         # If earliest and latest dates are not equal
         if(min(dlDuExpTrtSub$Date) != max(dlDuExpTrtSub$Date)) {
           # Sort df by date
@@ -245,7 +216,6 @@ names(baselineSub)[16] <- 'Total.soil.nitrogen'
 names(baselineSub)[17] <- 'Inorganic.soil.carbon'
 names(baselineSub)[61] <- 'Bulk.density'
 
-
 # Coerce pertinent quantities to numeric
 baselineSub$Total.soil.carbon <- as.numeric(baselineSub$Total.soil.carbon)
 baselineSub$Inorganic.soil.carbon <-
@@ -254,11 +224,11 @@ baselineSub$Bulk.density <- as.numeric(baselineSub$Bulk.density)
 baselineSub$Total.soil.nitrogen <- as.numeric(baselineSub$Total.soil.nitrogen)
 
 # Calculate soil organic carbon
-baselineSub$Organic.soil.carbon <- baselineSub$Total.soil.carbon -
+baselineSub$Soil.organic.carbon <- baselineSub$Total.soil.carbon -
   baselineSub$Inorganic.soil.carbon
 
 # Calculate soil organic carbon stocks
-baselineSub$Soil.organic.carbon.stocks <- baselineSub$Organic.soil.carbon *
+baselineSub$Soil.organic.carbon.stocks <- baselineSub$Soil.organic.carbon *
   baselineSub$Bulk.density * (baselineSub$Depth.lower - baselineSub$Depth.upper)
 
 # Calculate soil N stocks
@@ -268,10 +238,12 @@ baselineSub$Soil.nitrogen.stocks <- baselineSub$Total.soil.nitrogen *
 # Provides functions for date arithmetic
 library(lubridate)
 
+# Coerce text dates to 'Date' class
+baselineSub$Date <- as.Date(baselineSub$Date, format = '%m/%d/%Y')
+
 # Create columns for delta C values
 baselineSub$Delta.soil.organic.carbon.stocks <- NA_real_
 baselineSub$Yearly.delta.soil.organic.carbon.stocks <- NA_real_
-
 
 # Calculate change in soil organic carbon stocks
 for(i in seq(2, nrow(baselineSub), by =2)) {
@@ -286,8 +258,19 @@ for(i in seq(2, nrow(baselineSub), by =2)) {
     baselineSub$Delta.soil.organic.carbon.stocks[i] / numberOfYears
 }
 
+# Restore original column names to baselineSub
+names(baselineSub)[names(baselineSub) == 'Depth.upper'] <- upperLayerOriginal
+names(baselineSub)[names(baselineSub) == 'Depth.lower'] <- lowerLayerOriginal
+names(baselineSub)[15] <- names(carbonSubset)[15]
+names(baselineSub)[16] <- names(carbonSubset)[16]
+names(baselineSub)[17] <- names(carbonSubset)[17]
+names(baselineSub)[61] <- names(carbonSubset)[61]
+
 
 write.csv(baselineSub, file = paste(xlsPath, 'baselineSub.csv'))
+
+
+
 
 #  ----------------------------------------------
 #
