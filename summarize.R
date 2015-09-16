@@ -26,35 +26,7 @@ measSoilPhys <- openxlsx::read.xlsx(xlsInFile, sheet = 'MeasSoilPhys')
 #measSoilPhys <- measSoilPhys[, names(measSoilPhys) %in% names(summary)]
 treatments <- openxlsx::read.xlsx(xlsInFile, sheet = 'Treatments')
 
-
-#-------------- Debugging block 1 start -----------------------------------
-#
-# Find the indices of duplicate rows within each worksheet
-# expUnitsDupInd <- which(duplicated(expUnits))
-# mgtAmendsDupInd <- which(duplicated(mgtAmends))
-# measSoilChemDupInd <- which(duplicated(measSoilChem))
-# measSoilPhysDupInd <- which(duplicated(measSoilPhys))
-# treatmentsDupInd <- which(duplicated(treatments))
-
-# For the current project, only mgtAmends and measSoilPhys have duplicate rows
-#
-# Sys.setenv(R_ZIPCMD = "C:/Rtools/bin/zip.exe") - run this if zip error occurs
-#
-# Compile a DF of unique observations representing mgtAmends duplicate rows
-# mgtAmendsDupDF <- unique(mgtAmends[mgtAmendsDupInd, ])
-# Write DF to an Excel file
-# openxlsx::write.xlsx(mgtAmendsDupDF,
-#                      file = paste(xlsPath, 'duplicates_original_mgmt.xlsx',
-#                                   sep = ''), sheetName = 'MgtAmendsDups')
-# Compile a DF of unique observations representing mgtAmends duplicate rows
-# measSoilPhysDupDF <- unique(measSoilPhys[measSoilPhysDupInd, ])
-# Write DF to an Excel file
-# openxlsx::write.xlsx(measSoilPhysDupDF,
-#                      file = paste(xlsPath, 'duplicates_original_phys.xlsx',
-#                                   sep = ''), sheetName = 'SoilPhysDups')
-#
-#-------------- Debugging block 1 end -----------------------------------
-
+# Keep only unique rows
 expUnits <- unique(expUnits)
 mgtAmends <- unique(mgtAmends)
 measSoilChem <- unique(measSoilChem)
@@ -64,13 +36,10 @@ treatments <- unique(treatments)
 # Perform a series of full outer joins on the five pertinent DFs
 mDF1 <- merge(x = expUnits, y = mgtAmends,
               by = c('Experimental.Unit.ID', 'Treatment.ID'), all = TRUE)
-
 mDF2 <- merge(x = mDF1, y = measSoilChem,
               by = c('Experimental.Unit.ID', 'Treatment.ID'), all = TRUE)
-
 mDF3 <- merge(x = mDF2, y = measSoilPhys,
               by = c('Experimental.Unit.ID', 'Treatment.ID'), all = TRUE)
-
 mDF4 <- merge(x = mDF3, y = treatments, by = 'Treatment.ID', all = TRUE)
 
 # Add a column for state abbreviation
@@ -109,13 +78,12 @@ write.csv(mDF4, file = paste(xlsPath, 'mDF4.csv', sep = ''))
 
 
 #------- SUBSETTING FOR CARBON DATA --------------------------------------------
+#
+# Choose one of the following three subsets:
 
 # Create a subset for TSC and BD only.  If SIC value is missing, we will assume
 # that SIC was negligibly small, implying that SOC ~ TSC.
-
-# ++++++  code will go here
-
-
+mDF4_TSC_BD <- mDF4[!is.na(mDF4[, 15]) & !is.na(mDF4[, 61]), ]
 
 # Subset only those rows in which total soil carbon, inorganic soil carbon
 # and bulk density all exist
@@ -142,7 +110,7 @@ write.csv(soilPartCarbon, file = paste(xlsPath, 'mDF4_TSC_ISC_SPC_present.csv',
 # Read in csv format to avoid memory errors on a 4GB system
 # carbonSubset <- read.csv(xlsInFile)
 
-carbonSubset <- carbonDF  # Subset of mDF4 with values to calculate soil C
+carbonSubset <- mDF4_TSC_BD  # Subset of mDF4 with values to calculate soil C
 
 # Rename carbonSubset depth columns for easier coding
 #
@@ -150,7 +118,6 @@ upperLayerOriginal <- 'Upper.soil.layer,.soil,.centimeters'
 lowerLayerOriginal <- 'Lower.soil.layer,.soil,.centimeters'
 names(carbonSubset)[names(carbonSubset) == upperLayerOriginal] <- 'Depth.upper'
 names(carbonSubset)[names(carbonSubset) == lowerLayerOriginal] <- 'Depth.lower'
-
 
 # Define a DF 'baselineSub' whose rows will consist of Exp Unit ID +
 # Treatment ID + upper soil depth + lower soil depth combos from carbonSubset
