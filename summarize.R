@@ -82,8 +82,10 @@ write.csv(mDF4, file = paste(xlsPath, 'mDF4.csv', sep = ''))
 # Choose one of the following three subsets:
 
 # Create a subset for TSC and BD only.  If SIC value is missing, we will assume
-# that SIC was negligibly small, implying that SOC ~ TSC.
+# that SIC was measured to be negligibly small, implying that SOC ~ TSC.
 mDF4_TSC_BD <- mDF4[!is.na(mDF4[, 15]) & !is.na(mDF4[, 61]), ]
+write.csv(carbonDF, file = paste(xlsPath, 'mDF4_TSC_BD.csv',
+                                 sep = ''))
 
 # Subset only those rows in which total soil carbon, inorganic soil carbon
 # and bulk density all exist
@@ -92,11 +94,13 @@ carbonDF <- mDF4[!is.na(mDF4[, 15]) & !is.na(mDF4[, 17]) & !is.na(mDF4[, 61]), ]
 write.csv(carbonDF, file = paste(xlsPath, 'mDF4_TSC_ISC_present.csv',
                                   sep = ''))
 
-# Now subset those carbonDF rows in which soil particulate carbon exists
+# Subset only those rows in which total soil carbon, inorganic soil carbon,
+# soil particulate carbon and bulk density all exist
 soilPartCarbon <- carbonDF[!is.na(carbonDF[, 18]), ]
 # Write the final merged DF to a csv file
 write.csv(soilPartCarbon, file = paste(xlsPath, 'mDF4_TSC_ISC_SPC_present.csv',
                                  sep = ''))
+
 
 #------ SEARCH FOR MULTIPLE DATES -----------------------------------------
 #
@@ -129,8 +133,9 @@ baselineSub <- carbonSubset[FALSE, ]
 # The dplyr package provides filter()
 library(dplyr)
 
-# Remove rows where date = NA
-carbonSubset <- filter(carbonSubset, !is.na(Date))
+# Keep only rows where date is not NA, and TSC and BD are both > 0
+carbonSubset <- filter(carbonSubset, !is.na(Date) & carbonSubset[, 15] > 0 &
+                         carbonSubset[, 61] > 0)
 
 # Form a list of unique Treatment IDs in carbonSubset
 trtIdList <- unique(carbonSubset$Treatment.ID)
@@ -175,7 +180,7 @@ for(trt in trtIdList) {
 }  # End trt for-loop
 
 
-# Calculate SOC stocks
+# Calculate organic soil carbon stocks
 #
 # Rename key columns for conciseness
 names(baselineSub)[15] <- 'Total.soil.carbon'
@@ -191,16 +196,27 @@ baselineSub$Bulk.density <- as.numeric(baselineSub$Bulk.density)
 baselineSub$Total.soil.nitrogen <- as.numeric(baselineSub$Total.soil.nitrogen)
 
 # Calculate soil organic carbon
-baselineSub$Soil.organic.carbon <- baselineSub$Total.soil.carbon -
-  baselineSub$Inorganic.soil.carbon
+#
+# If inorganic soil carbon is NA or nonpositive, assume OSC = TSC
+if(is.na(baselineSub$Inorganic.soil.carbon) |
+   baselineSub$Inorganic.soil.carbon <= 0) {
+  baselineSub$Organic.soil.carbon <- baselineSub$Total.soil.carbon
+
+# Else organic soil carbon = total soil carbon - inorganic soil carbon
+} else {
+  baselineSub$Organic.soil.carbon <- baselineSub$Total.soil.carbon -
+    baselineSub$Inorganic.soil.carbon
+}
 
 # Calculate soil organic carbon stocks
-baselineSub$Soil.organic.carbon.stocks <- baselineSub$Soil.organic.carbon *
-  baselineSub$Bulk.density * (baselineSub$Depth.lower - baselineSub$Depth.upper)
+baselineSub$Organic.soil.carbon.stocks <- baselineSub$Organic.soil.carbon *
+  baselineSub$Bulk.density * (baselineSub$Depth.lower -
+                                baselineSub$Depth.upper) * 100
 
 # Calculate soil N stocks
 baselineSub$Soil.nitrogen.stocks <- baselineSub$Total.soil.nitrogen *
-  baselineSub$Bulk.density * (baselineSub$Depth.lower - baselineSub$Depth.upper)
+  baselineSub$Bulk.density * (baselineSub$Depth.lower -
+                                baselineSub$Depth.upper) * 100
 
 # Provides functions for date arithmetic
 library(lubridate)
@@ -209,20 +225,29 @@ library(lubridate)
 baselineSub$Date <- as.Date(baselineSub$Date, format = '%m/%d/%Y')
 
 # Create columns for delta C values
-baselineSub$Delta.soil.organic.carbon.stocks <- NA_real_
-baselineSub$Yearly.delta.soil.organic.carbon.stocks <- NA_real_
+baselineSub$Delta.organic.soil.carbon.stocks <- NA_real_
+baselineSub$Yearly.delta.organic.soil.carbon.stocks <- NA_real_
+
+# Create columns for start date and end date
+baselineSub$Start.date <- NA
+baselineSub$End.date <- NA
 
 # Calculate change in soil organic carbon stocks
 for(i in seq(2, nrow(baselineSub), by =2)) {
   # Absolute change
-  baselineSub$Delta.soil.organic.carbon.stocks[i] <-
-    baselineSub$Soil.organic.carbon.stocks[i] -
-    baselineSub$Soil.organic.carbon.stocks[i - 1]
+  baselineSub$Delta.organic.soil.carbon.stocks[i] <-
+    baselineSub$Organic.soil.carbon.stocks[i] -
+    baselineSub$Organic.soil.carbon.stocks[i - 1]
   # Number of years in study (fractional)
   numberOfYears <- (baselineSub$Date[i] - baselineSub$Date[i - 1]) / eyears(1)
   # Yearly change
-  baselineSub$Yearly.delta.soil.organic.carbon.stocks[i] <-
-    baselineSub$Delta.soil.organic.carbon.stocks[i] / numberOfYears
+  baselineSub$Yearly.delta.organic.soil.carbon.stocks[i] <-
+    baselineSub$Delta.organic.soil.carbon.stocks[i] / numberOfYears
+  # Populate start date and end date fields
+  baselineSub$Start.date[i - 1] <- baselineSub$Date[i - 1]
+  baselineSub$End.date[i - 1] <- baselineSub$Date[i]
+  baselineSub$Start.date[i] <- baselineSub$Date[i - 1]
+  baselineSub$End.date[i] <- baselineSub$Date[i]
 }
 
 # Restore original column names to baselineSub
@@ -233,9 +258,21 @@ names(baselineSub)[16] <- names(carbonSubset)[16]
 names(baselineSub)[17] <- names(carbonSubset)[17]
 names(baselineSub)[61] <- names(carbonSubset)[61]
 
+# Add units to new column headings
+names(baselineSub)[names(baselineSub) == 'Organic.soil.carbon'] <-
+  'Organic.soil.carbon,.grams.C.per.kilogram.soil'
+names(baselineSub)[names(baselineSub) == 'Organic.soil.carbon.stocks'] <-
+  'Organic.soil.carbon.stocks,.grams.C.per.kilogram.soil'
+names(baselineSub)[names(baselineSub) == 'Soil.nitrogen.stocks'] <-
+  'Soil.nitrogen.stocks,.grams.N.per.kilogram.soil'
+names(baselineSub)[names(baselineSub) == 'Delta.organic.soil.carbon.stocks'] <-
+  'Delta.organic.soil.carbon.stocks,.grams.C.per.kilogram.soil'
+names(baselineSub)[names(baselineSub) ==
+                     'Yearly.delta.organic.soil.carbon.stocks'] <-
+  'Yearly.delta.organic.soil.carbon.stocks,.grams.C.per.kilogram.soil.per.year'
 
+# Save analysis results
 write.csv(baselineSub, file = paste(xlsPath, 'baselineSub.csv'))
-
 
 
 
