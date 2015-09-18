@@ -6,8 +6,8 @@
 ################################################################################
 
 # Working copy of GRACEnet data file
-xlsPath <- 'W:/GRACEnet/data summary project/'
-#xlsPath <- 'C:/Users/Robert/Documents/R/GRACEnet/'
+#xlsPath <- 'W:/GRACEnet/data summary project/'
+xlsPath <- 'C:/Users/Robert/Documents/R/GRACEnet/'
 xlsInFile <- paste(xlsPath, 'GRACEnet_working_copy.xlsx', sep = '')
 
 # Use openxlsx for reading and writing large xlsx files.
@@ -130,7 +130,7 @@ names(carbonSubset)[names(carbonSubset) == lowerLayerOriginal] <- 'Depth.lower'
 # Replicate column names from carbonSubset
 baselineSub <- carbonSubset[FALSE, ]
 
-# The dplyr package provides filter()
+# The dplyr package provides filter() and other functions
 library(dplyr)
 
 # Keep only rows where date is not NA, and TSC and BD are both > 0
@@ -141,6 +141,8 @@ carbonSubset <- filter(carbonSubset, !is.na(Date) & carbonSubset[, 15] > 0 &
 trtIdList <- unique(carbonSubset$Treatment.ID)
 # Remove NA values from trtIdList
 trtIdList <- trtIdList[!is.na(trtIdList)]
+# Coerce text dates to 'Date' class
+carbonSubset$Date <- as.Date(carbonSubset$Date, format = '%m/%d/%Y')
 
 # For each Treatment ID...
 for(trt in trtIdList) {
@@ -218,12 +220,6 @@ baselineSub$Soil.nitrogen.stocks <- baselineSub$Total.soil.nitrogen *
   baselineSub$Bulk.density * (baselineSub$Depth.lower -
                                 baselineSub$Depth.upper) * 100
 
-# Provides functions for date arithmetic
-library(lubridate)
-
-# Coerce text dates to 'Date' class
-baselineSub$Date <- as.Date(baselineSub$Date, format = '%m/%d/%Y')
-
 # Create columns for delta C values
 baselineSub$Delta.organic.soil.carbon.stocks <- NA_real_
 baselineSub$Yearly.delta.organic.soil.carbon.stocks <- NA_real_
@@ -231,6 +227,9 @@ baselineSub$Yearly.delta.organic.soil.carbon.stocks <- NA_real_
 # Create columns for start date and end date
 baselineSub$Start.date <- NA
 baselineSub$End.date <- NA
+
+# Provides functions for date arithmetic
+library(lubridate)
 
 # Calculate change in soil organic carbon stocks
 for(i in seq(2, nrow(baselineSub), by =2)) {
