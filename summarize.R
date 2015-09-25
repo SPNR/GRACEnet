@@ -6,8 +6,8 @@
 ################################################################################
 
 # Working copy of GRACEnet data file
-#xlsPath <- 'W:/GRACEnet/data summary project/'
-xlsPath <- 'C:/Users/Robert/Documents/R/GRACEnet/'
+xlsPath <- 'W:/GRACEnet/soil carbon project/'
+#xlsPath <- 'C:/Users/Robert/Documents/R/GRACEnet/'
 xlsInFile <- paste(xlsPath, 'GRACEnet_working_copy.xlsx', sep = '')
 
 # Use openxlsx for reading and writing large xlsx files.
@@ -84,7 +84,7 @@ write.csv(mDF4, file = paste(xlsPath, 'mDF4.csv', sep = ''))
 # Create a subset for TSC and BD only.  If SIC value is missing, we will assume
 # that SIC was measured to be negligibly small, implying that SOC ~ TSC.
 mDF4_TSC_BD <- mDF4[!is.na(mDF4[, 15]) & !is.na(mDF4[, 61]), ]
-write.csv(carbonDF, file = paste(xlsPath, 'mDF4_TSC_BD.csv',
+write.csv(mDF4_TSC_BD, file = paste(xlsPath, 'mDF4_TSC_BD_present.csv',
                                  sep = ''))
 
 # Subset only those rows in which total soil carbon, inorganic soil carbon
@@ -225,8 +225,8 @@ baselineSub$Delta.organic.soil.carbon.stocks <- NA_real_
 baselineSub$Yearly.delta.organic.soil.carbon.stocks <- NA_real_
 
 # Create columns for start date and end date
-baselineSub$Start.date <- NA
-baselineSub$End.date <- NA
+baselineSub$Start.date <- structure(NA, class = 'Date')
+baselineSub$End.date <- structure(NA, class = 'Date')
 
 # Provides functions for date arithmetic
 library(lubridate)
