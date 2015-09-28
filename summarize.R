@@ -8,7 +8,7 @@
 # Working copy of GRACEnet data file
 xlsPath <- 'W:/GRACEnet/soil carbon project/'
 #xlsPath <- 'C:/Users/Robert/Documents/R/GRACEnet/'
-xlsInFile <- paste(xlsPath, 'GRACEnet_working_copy.xlsx', sep = '')
+xlsInFile <- paste(xlsPath, 'GRACEnet_working_copy_lite.xlsx', sep = '')
 
 # Use openxlsx for reading and writing large xlsx files.
 library(openxlsx)
@@ -46,34 +46,41 @@ mDF4 <- merge(x = mDF3, y = treatments, by = 'Treatment.ID', all = TRUE)
 mDF4$State <- NA_character_
 
 # For each row in mDF4...
-for(i in 1:nrow(mDF4)) {
-  
-  # Replace a Treatment ID of 0 with NA
-  if(!is.na(mDF4$Treatment.ID[i]) &
-       mDF4$Treatment.ID[i] == 0) mDF4$Treatment.ID[i] <- NA
-  # Replace an Experimental Unit ID of 0 with NA
-  if(!is.na(mDF4$Experimental.Unit.ID[i]) &
-       mDF4$Experimental.Unit.ID[i] == 0) mDF4$Experimental.Unit.ID[i] <- NA
-  
-  # If Treatment ID exists, subset the state abbreviation
-  if(!is.na(mDF4$Treatment.ID[i])) {
+# for(i in 1:nrow(mDF4)) {
+#   #------- Not sure why I'm checking for zero values here; class is character!
+#   # Replace a Treatment ID of 0 with NA
+#   if(!is.na(mDF4$Treatment.ID[i]) &
+#        mDF4$Treatment.ID[i] == 0) mDF4$Treatment.ID[i] <- NA
+#   # Replace an Experimental Unit ID of 0 with NA
+#   if(!is.na(mDF4$Experimental.Unit.ID[i]) &
+#        mDF4$Experimental.Unit.ID[i] == 0) mDF4$Experimental.Unit.ID[i] <- NA
+
+
+# Create progress bar for following for-loop
+pb <- winProgressBar(title = "progress bar", min = 0,
+                     max = total, width = 300)
+
+for(i in 1:nrow(mDF4)) {  
     mDF4$State[i] <- substr(mDF4$Treatment.ID[i], 1, 2)
     # Else if Experimental Unit ID exists, subset the state abbreviation
-  }else if(!is.na(mDF4$Experimental.Unit.ID[i])) {
-    mDF4$State[i] <- substr(mDF4$Experimental.Unit.ID[i], 1, 2)
-  }
-  
+
   # Check for valid state abbreviation
   if(is.na(mDF4$State[i] %in% state.abb)) {
     msg <- paste('Invalid state abbreviation in row', i)
     stop(msg)
   }
-  
-}  # End for-loop
+    Sys.sleep(0.1)
+    setWinProgressBar(pb, i, title=paste( round(i/nrow(mDF4)*100, 0),
+                                          "% done"))
+}
+close(pb)  # Close progress bar
+
 
 # Write the final merged DF to a csv file
 write.csv(mDF4, file = paste(xlsPath, 'mDF4.csv', sep = ''))
 
+tempPath <- 'E:/'
+write.csv(mDF4, file = paste(tempPath, 'mDF4.csv', sep = ''))
 # openxlsx::write.xlsx(mDF4, file = paste(xlsPath, 'mDF4.xlsx', sep = ''))
 
 
@@ -83,23 +90,24 @@ write.csv(mDF4, file = paste(xlsPath, 'mDF4.csv', sep = ''))
 
 # Create a subset for TSC and BD only.  If SIC value is missing, we will assume
 # that SIC was measured to be negligibly small, implying that SOC ~ TSC.
-mDF4_TSC_BD <- mDF4[!is.na(mDF4[, 15]) & !is.na(mDF4[, 61]), ]
-write.csv(mDF4_TSC_BD, file = paste(xlsPath, 'mDF4_TSC_BD_present.csv',
+mDF4_TSC_BD <- mDF4[!is.na(mDF4[, 17]) & !is.na(mDF4[, 63]), ]
+tempPath <- 'E:/'
+write.csv(mDF4_TSC_BD, file = paste(tempPath, 'mDF4_TSC_BD_present.csv',
                                  sep = ''))
 
-# Subset only those rows in which total soil carbon, inorganic soil carbon
-# and bulk density all exist
-carbonDF <- mDF4[!is.na(mDF4[, 15]) & !is.na(mDF4[, 17]) & !is.na(mDF4[, 61]), ]
-# Write the final merged DF to a csv file
-write.csv(carbonDF, file = paste(xlsPath, 'mDF4_TSC_ISC_present.csv',
-                                  sep = ''))
-
-# Subset only those rows in which total soil carbon, inorganic soil carbon,
-# soil particulate carbon and bulk density all exist
-soilPartCarbon <- carbonDF[!is.na(carbonDF[, 18]), ]
-# Write the final merged DF to a csv file
-write.csv(soilPartCarbon, file = paste(xlsPath, 'mDF4_TSC_ISC_SPC_present.csv',
-                                 sep = ''))
+# # Subset only those rows in which total soil carbon, inorganic soil carbon
+# # and bulk density all exist
+# carbonDF <- mDF4[!is.na(mDF4[, 15]) & !is.na(mDF4[, 17]) & !is.na(mDF4[, 61]), ]
+# # Write the final merged DF to a csv file
+# write.csv(carbonDF, file = paste(xlsPath, 'mDF4_TSC_ISC_present.csv',
+#                                   sep = ''))
+# 
+# # Subset only those rows in which total soil carbon, inorganic soil carbon,
+# # soil particulate carbon and bulk density all exist
+# soilPartCarbon <- carbonDF[!is.na(carbonDF[, 18]), ]
+# # Write the final merged DF to a csv file
+# write.csv(soilPartCarbon, file = paste(xlsPath, 'mDF4_TSC_ISC_SPC_present.csv',
+#                                  sep = ''))
 
 
 #------ SEARCH FOR MULTIPLE DATES -----------------------------------------
@@ -118,10 +126,25 @@ carbonSubset <- mDF4_TSC_BD  # Subset of mDF4 with values to calculate soil C
 
 # Rename carbonSubset depth columns for easier coding
 #
+# Depth descriptor from measSoilChem
 upperLayerOriginal <- 'Upper.soil.layer,.soil,.centimeters'
 lowerLayerOriginal <- 'Lower.soil.layer,.soil,.centimeters'
-names(carbonSubset)[names(carbonSubset) == upperLayerOriginal] <- 'Depth.upper'
-names(carbonSubset)[names(carbonSubset) == lowerLayerOriginal] <- 'Depth.lower'
+names(carbonSubset)[names(carbonSubset) ==
+                      upperLayerOriginal] <- 'Depth.upper.chem'
+names(carbonSubset)[names(carbonSubset) ==
+                      lowerLayerOriginal] <- 'Depth.lower.chem'
+
+# Depth descriptor from measSoilPhys
+upperHorizonOriginal <- 'Soil.horizon.depth,.upper,.centimeter'
+lowerHorizonOriginal <- 'Soil.horizon.depth,.lower,.centimeter'
+names(carbonSubset)[names(carbonSubset) ==
+                      upperHorizonOriginal] <- 'Depth.upper.phys'
+names(carbonSubset)[names(carbonSubset) ==
+                      lowerHorizonOriginal] <- 'Depth.lower.phys'
+
+
+
+
 
 # Define a DF 'baselineSub' whose rows will consist of Exp Unit ID +
 # Treatment ID + upper soil depth + lower soil depth combos from carbonSubset
