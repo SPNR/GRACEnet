@@ -58,7 +58,7 @@ mDF4$State <- NA_character_
 
 # Create progress bar for following for-loop
 pb <- winProgressBar(title = "progress bar", min = 0,
-                     max = total, width = 300)
+                     max = nrow(mDF4), width = 300)
 
 for(i in 1:nrow(mDF4)) {  
     mDF4$State[i] <- substr(mDF4$Treatment.ID[i], 1, 2)
